@@ -65,17 +65,6 @@ npm run dev
 
 Open http://localhost:5173.
 
-## Demo roles
-
-Use the role/person dropdown in the top-right to switch between demo users:
-
-- Aarav Sharma — Staff
-- Meera Nair — Manager
-- Rohan Iyer — Staff
-- Ananya Rao — Finance
-- Vikram Singh — Manager
-
-The dropdown is a demo convenience; a production system would use real authentication and authorization.
 
 ## Suggested demo flow
 
