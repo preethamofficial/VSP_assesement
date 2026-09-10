@@ -36,6 +36,19 @@ class StatusInput(BaseModel):
 class SeedReset(BaseModel):
     confirm: bool
 
+class LoginInput(BaseModel):
+    name: str
+    password: str
+    access_type: str
+
+class EmployeeRequestInput(BaseModel):
+    name: str
+    email: str
+
+class EmployeeRequestDecision(BaseModel):
+    actor_id: int
+    approve: bool
+
 def db():
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
@@ -46,7 +59,8 @@ def init_db():
     con.executescript('''
     CREATE TABLE IF NOT EXISTS employees (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL,
-      manager_id INTEGER, monthly_limit REAL NOT NULL DEFAULT 30000
+      manager_id INTEGER, monthly_limit REAL NOT NULL DEFAULT 30000,
+      password TEXT NOT NULL DEFAULT 'employee123'
     );
     CREATE TABLE IF NOT EXISTS claims (
       id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER NOT NULL, vendor TEXT NOT NULL,
@@ -59,10 +73,18 @@ def init_db():
       id INTEGER PRIMARY KEY AUTOINCREMENT, claim_id INTEGER, actor_id INTEGER, action TEXT,
       details TEXT, created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS employee_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, reviewed_at TEXT,
+      reviewed_by INTEGER
+    );
     ''')
     columns={row['name'] for row in con.execute('PRAGMA table_info(claims)')}
     if 'receipt_image' not in columns:
         con.execute('ALTER TABLE claims ADD COLUMN receipt_image TEXT')
+    employee_columns={row['name'] for row in con.execute('PRAGMA table_info(employees)')}
+    if 'password' not in employee_columns:
+        con.execute("ALTER TABLE employees ADD COLUMN password TEXT NOT NULL DEFAULT 'employee123'")
     con.commit(); con.close()
 
 def normalize(s: str) -> str:
@@ -112,14 +134,15 @@ def duplicate_candidates(con, employee_id, vendor, expense_date, amount, receipt
     return out
 
 def seed():
-    con=db(); con.execute('DELETE FROM audit_log'); con.execute('DELETE FROM claims'); con.execute('DELETE FROM employees')
+    con=db(); con.execute('DELETE FROM audit_log'); con.execute('DELETE FROM claims'); con.execute('DELETE FROM employee_requests'); con.execute('DELETE FROM employees')
     employees=[
       (1,'Mounika','mounika@local','staff',4,30000),
       (2,'Rakshitha','rakshitha@local','team_lead',4,40000),
       (3,'Rakhith','rakhith@local','staff',4,30000),
       (4,'Preetham','preetham@local','manager',None,50000),
     ]
-    con.executemany('INSERT INTO employees VALUES (?,?,?,?,?,?)',employees)
+    con.executemany('INSERT INTO employees(id,name,email,role,manager_id,monthly_limit) VALUES (?,?,?,?,?,?)',employees)
+    con.execute("UPDATE employees SET password='manager123' WHERE role='manager'")
     claims=[
       (1,'Bean & Brew','2026-09-10',480,'Meals','Client lunch meeting','submitted',None),
       (1,'Metro Cabs','2026-09-09',310,'Travel','Travel to client office','submitted',None),
@@ -175,7 +198,43 @@ def health(): return {'ok':True,'service':'ClaimFlow API'}
 
 @app.get('/api/employees')
 def employees():
-    con=db(); rows=[dict(r) for r in con.execute('SELECT * FROM employees ORDER BY role DESC,name')]; con.close(); return rows
+    con=db(); rows=[dict(r) for r in con.execute('SELECT id,name,email,role,manager_id,monthly_limit FROM employees ORDER BY role DESC,name')]; con.close(); return rows
+
+@app.post('/api/login')
+def login(inp: LoginInput):
+    if inp.access_type not in ('manager','employee'): raise HTTPException(400,'Select manager or employee access')
+    con=db(); row=con.execute('SELECT id,name,email,role,manager_id,monthly_limit,password FROM employees WHERE lower(name)=lower(?)',(inp.name.strip(),)).fetchone(); con.close()
+    if not row or row['password']!=inp.password: raise HTTPException(401,'Incorrect name or password')
+    if inp.access_type=='manager' and row['role']!='manager': raise HTTPException(403,'This account does not have manager access')
+    if inp.access_type=='employee' and row['role']=='manager': raise HTTPException(403,'Please use manager access')
+    result=dict(row); result.pop('password'); return result
+
+@app.post('/api/employee-requests')
+def request_employee_access(inp: EmployeeRequestInput):
+    name=inp.name.strip(); email=inp.email.strip().lower()
+    if not name or not email or '@' not in email: raise HTTPException(400,'Enter a valid name and email')
+    con=db()
+    if con.execute('SELECT 1 FROM employees WHERE email=?',(email,)).fetchone() or con.execute('SELECT 1 FROM employee_requests WHERE email=? AND status="pending"',(email,)).fetchone():
+        con.close(); raise HTTPException(409,'An account or pending request already exists for this email')
+    con.execute('INSERT INTO employee_requests(name,email,created_at) VALUES (?,?,?)',(name,email,datetime.now().isoformat(timespec='seconds')))
+    con.commit(); con.close(); return {'ok':True,'message':'Request sent to the manager for approval'}
+
+@app.get('/api/employee-requests')
+def employee_requests(actor_id:int):
+    con=db(); actor=con.execute('SELECT role FROM employees WHERE id=?',(actor_id,)).fetchone()
+    if not actor or actor['role']!='manager': con.close(); raise HTTPException(403,'Only the manager can view employee requests')
+    rows=[dict(r) for r in con.execute('SELECT * FROM employee_requests WHERE status="pending" ORDER BY id DESC')]; con.close(); return rows
+
+@app.post('/api/employee-requests/{request_id}/decision')
+def decide_employee_request(request_id:int, inp:EmployeeRequestDecision):
+    con=db(); actor=con.execute('SELECT * FROM employees WHERE id=?',(inp.actor_id,)).fetchone(); request=con.execute('SELECT * FROM employee_requests WHERE id=? AND status="pending"',(request_id,)).fetchone()
+    if not actor or actor['role']!='manager': con.close(); raise HTTPException(403,'Only the manager can approve employee requests')
+    if not request: con.close(); raise HTTPException(404,'Pending employee request not found')
+    status='approved' if inp.approve else 'rejected'
+    con.execute('UPDATE employee_requests SET status=?, reviewed_at=?, reviewed_by=? WHERE id=?',(status,datetime.now().isoformat(timespec='seconds'),actor['id'],request_id))
+    if inp.approve:
+        con.execute('INSERT INTO employees(name,email,role,manager_id,monthly_limit) VALUES (?,?,?,?,?)',(request['name'],request['email'],'staff',actor['id'],30000))
+    con.commit(); con.close(); return {'ok':True,'status':status}
 
 @app.post('/api/parse-receipt')
 def parse(inp: ReceiptInput):
