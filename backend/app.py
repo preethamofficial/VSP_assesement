@@ -44,10 +44,16 @@ class LoginInput(BaseModel):
 class EmployeeRequestInput(BaseModel):
     name: str
     email: str
+    password: str
 
 class EmployeeRequestDecision(BaseModel):
     actor_id: int
     approve: bool
+
+class PasswordChangeInput(BaseModel):
+    actor_id: int
+    current_password: str
+    new_password: str
 
 def db():
     con = sqlite3.connect(DB)
@@ -75,7 +81,7 @@ def init_db():
     );
     CREATE TABLE IF NOT EXISTS employee_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
-      status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, reviewed_at TEXT,
+      password TEXT NOT NULL DEFAULT 'employee123', status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, reviewed_at TEXT,
       reviewed_by INTEGER
     );
     ''')
@@ -85,6 +91,9 @@ def init_db():
     employee_columns={row['name'] for row in con.execute('PRAGMA table_info(employees)')}
     if 'password' not in employee_columns:
         con.execute("ALTER TABLE employees ADD COLUMN password TEXT NOT NULL DEFAULT 'employee123'")
+    request_columns={row['name'] for row in con.execute('PRAGMA table_info(employee_requests)')}
+    if 'password' not in request_columns:
+        con.execute("ALTER TABLE employee_requests ADD COLUMN password TEXT NOT NULL DEFAULT 'employee123'")
     con.commit(); con.close()
 
 def normalize(s: str) -> str:
@@ -137,7 +146,7 @@ def seed():
     con=db(); con.execute('DELETE FROM audit_log'); con.execute('DELETE FROM claims'); con.execute('DELETE FROM employee_requests'); con.execute('DELETE FROM employees')
     employees=[
       (1,'Mounika','mounika@local','staff',4,30000),
-      (2,'Rakshitha','rakshitha@local','team_lead',4,40000),
+      (2,'Rakshitha (Team Lead)','rakshitha@local','staff',4,40000),
       (3,'Rakhith','rakhith@local','staff',4,30000),
       (4,'Preetham','preetham@local','manager',None,50000),
     ]
@@ -213,10 +222,11 @@ def login(inp: LoginInput):
 def request_employee_access(inp: EmployeeRequestInput):
     name=inp.name.strip(); email=inp.email.strip().lower()
     if not name or not email or '@' not in email: raise HTTPException(400,'Enter a valid name and email')
+    if len(inp.password)<6: raise HTTPException(400,'Password must contain at least 6 characters')
     con=db()
     if con.execute('SELECT 1 FROM employees WHERE email=?',(email,)).fetchone() or con.execute('SELECT 1 FROM employee_requests WHERE email=? AND status="pending"',(email,)).fetchone():
         con.close(); raise HTTPException(409,'An account or pending request already exists for this email')
-    con.execute('INSERT INTO employee_requests(name,email,created_at) VALUES (?,?,?)',(name,email,datetime.now().isoformat(timespec='seconds')))
+    con.execute('INSERT INTO employee_requests(name,email,password,created_at) VALUES (?,?,?,?)',(name,email,inp.password,datetime.now().isoformat(timespec='seconds')))
     con.commit(); con.close(); return {'ok':True,'message':'Request sent to the manager for approval'}
 
 @app.get('/api/employee-requests')
@@ -233,8 +243,16 @@ def decide_employee_request(request_id:int, inp:EmployeeRequestDecision):
     status='approved' if inp.approve else 'rejected'
     con.execute('UPDATE employee_requests SET status=?, reviewed_at=?, reviewed_by=? WHERE id=?',(status,datetime.now().isoformat(timespec='seconds'),actor['id'],request_id))
     if inp.approve:
-        con.execute('INSERT INTO employees(name,email,role,manager_id,monthly_limit) VALUES (?,?,?,?,?)',(request['name'],request['email'],'staff',actor['id'],30000))
+        con.execute('INSERT INTO employees(name,email,role,manager_id,monthly_limit,password) VALUES (?,?,?,?,?,?)',(request['name'],request['email'],'staff',actor['id'],30000,request['password']))
     con.commit(); con.close(); return {'ok':True,'status':status}
+
+@app.post('/api/profile/password')
+def change_password(inp: PasswordChangeInput):
+    if len(inp.new_password)<6: raise HTTPException(400,'New password must contain at least 6 characters')
+    con=db(); actor=con.execute('SELECT * FROM employees WHERE id=?',(inp.actor_id,)).fetchone()
+    if not actor or actor['password']!=inp.current_password: con.close(); raise HTTPException(401,'Current password is incorrect')
+    con.execute('UPDATE employees SET password=? WHERE id=?',(inp.new_password,inp.actor_id))
+    con.commit(); con.close(); return {'ok':True}
 
 @app.post('/api/parse-receipt')
 def parse(inp: ReceiptInput):
