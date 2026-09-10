@@ -126,14 +126,3 @@ docker run --rm -p 8000:8000 claimflow
 ```
 
 Then open http://localhost:8000.
-
-## If I had another week
-
-- Add real authentication and role-based access control.
-- Add receipt image upload and OCR.
-- Add stronger duplicate detection using embeddings and merchant/receipt identifiers.
-- Add edit/audit history and notification emails.
-- Add CSV/PDF export for finance.
-- Add configurable policies per category and employee.
-- Add production PostgreSQL, migrations and CI/CD.
-- Add accessibility and end-to-end browser tests.
