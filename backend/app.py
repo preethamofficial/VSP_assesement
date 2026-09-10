@@ -117,9 +117,21 @@ def seed():
     con.executemany('INSERT INTO employees VALUES (?,?,?,?,?,?)',employees)
     claims=[
       (1,'Bean & Brew','2026-09-10',480,'Meals','Client lunch meeting','submitted',None),
+      (1,'Metro Cabs','2026-09-09',310,'Travel','Travel to client office','submitted',None),
+      (1,'OfficeMart','2026-09-08',950,'Supplies','Work stationery purchase','submitted',None),
+      (1,'Sky Airlines','2026-09-06',4800,'Travel','Client-site travel','submitted',None),
       (2,'OfficeMart','2026-09-10',1250,'Supplies','Team stationery purchase','submitted',None),
+      (2,'Cloud Cafe','2026-09-09',420,'Meals','Team planning session','submitted',None),
+      (2,'Team Taxi','2026-09-07',650,'Travel','Team meeting travel','submitted',None),
+      (2,'Client Lounge','2026-09-05',1500,'Client Entertainment','Client review meeting','submitted',None),
       (3,'City Cab','2026-09-10',360,'Travel','Sales client visit','submitted',None),
+      (3,'Sales Lunch','2026-09-09',780,'Meals','Prospect meeting lunch','submitted',None),
+      (3,'Printer Pro','2026-09-07',2100,'Supplies','Sales material printing','submitted',None),
+      (3,'Travel Stay','2026-09-04',3200,'Accommodation','Outstation sales visit','submitted',None),
       (4,'Grand Hotel','2026-09-10',2200,'Accommodation','Manager business stay','submitted',None),
+      (4,'Executive Cab','2026-09-09',850,'Travel','Leadership meeting travel','submitted',None),
+      (4,'Strategy Dinner','2026-09-07',1800,'Client Entertainment','Business strategy dinner','submitted',None),
+      (4,'HQ Supplies','2026-09-05',760,'Supplies','Office supplies','submitted',None),
     ]
     """
       (1,'Metro Cabs','2026-09-02',210,'Travel','Auto ride to client office, receipt says Metro Cabs 02/09/2026 total ₹210','paid',4),
