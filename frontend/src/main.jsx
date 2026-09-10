@@ -34,6 +34,7 @@ function App(){
     {actor.role==='manager'&&<button className={page==='employees'?'active':''} onClick={()=>setPage('employees')}><Plus size={18}/>New employees</button>}
     {actor.role==='finance'&&<button className={page==='finance'?'active':''} onClick={()=>setPage('finance')}><WalletCards size={18}/>Finance</button>}
    </nav>
+   <div className="sidebarBottom"><button className="ghost" onClick={()=>setActor(null)}><LogOut size={16}/>Log out</button></div>
   </aside>
   <main><header><div><div className="eyebrow">{actor.role==='finance'?'FINANCE WORKSPACE':actor.role==='manager'?'MANAGER WORKSPACE':'STAFF WORKSPACE'}</div><h1>{page==='dashboard'?'Good morning, '+actor.name.split(' ')[0]:page[0].toUpperCase()+page.slice(1)}</h1></div><div className="actions"><select value={actor.id} onChange={e=>setActor(employees.find(x=>x.id===+e.target.value))}>{employees.map(e=><option key={e.id} value={e.id}>{e.name} · {e.role}</option>)}</select><button className="primary" onClick={()=>setShowNew(true)}><Plus size={18}/>New claim</button></div></header>
    {page==='dashboard'&&<Dashboard actor={actor} report={report} claims={visible} setPage={setPage}/>} 
