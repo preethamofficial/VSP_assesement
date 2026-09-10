@@ -10,10 +10,12 @@ function Badge({children}){return <span className={'badge '+String(children).toL
 function Stat({label,value,sub,icon:Icon}){return <div className="stat"><div className="statIcon"><Icon size={19}/></div><div><div className="statLabel">{label}</div><div className="statValue">{value}</div>{sub&&<div className="statSub">{sub}</div>}</div></div>}
 
 function App(){
- const [employees,setEmployees]=useState([]),[claims,setClaims]=useState([]),[report,setReport]=useState(null),[actor,setActor]=useState(null),[page,setPage]=useState('dashboard'),[loading,setLoading]=useState(true),[toast,setToast]=useState('')
+ const [employees,setEmployees]=useState([]),[claims,setClaims]=useState([]),[report,setReport]=useState(null),[actor,setActor]=useState(()=>{try{return JSON.parse(localStorage.getItem('claimflow_actor'))||null}catch{return null}}),[page,setPage]=useState('dashboard'),[loading,setLoading]=useState(true),[toast,setToast]=useState('')
  const [showNew,setShowNew]=useState(false),[bill,setBill]=useState(null),[requests,setRequests]=useState([])
  const refresh=async()=>{setLoading(true);try{const [e,c,r]=await Promise.all([api('/employees'),api('/claims'),api('/report?month='+new Date().toISOString().slice(0,7))]);setEmployees(e);setClaims(c);setReport(r)}finally{setLoading(false)}}
  useEffect(()=>{refresh()},[])
+ useEffect(()=>{if(actor)localStorage.setItem('claimflow_actor',JSON.stringify(actor));else localStorage.removeItem('claimflow_actor')},[actor])
+ useEffect(()=>{if(actor&&employees.length&&!employees.some(e=>e.id===actor.id))setActor(null)},[employees,actor])
  useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(''),3500);return()=>clearTimeout(t)}},[toast])
  const visible=useMemo(()=>{if(!actor)return claims; if(actor.role==='manager')return claims.filter(c=>c.manager_id===actor.id||c.employee_id===actor.id); if(actor.role==='finance')return claims; return claims.filter(c=>c.employee_id===actor.id)},[claims,actor])
  const login=async(input)=>{const person=await api('/login',{method:'POST',body:JSON.stringify(input)});setActor(person);setPage('dashboard');if(person.role==='manager')setRequests(await api('/employee-requests?actor_id='+person.id))}
