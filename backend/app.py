@@ -10,6 +10,7 @@ import sqlite3, re, json
 
 BASE = Path(__file__).resolve().parent
 DB = BASE / 'expense_claims.db'
+SAMPLE_BILL = '/sample-bill.png'
 app = FastAPI(title='ClaimFlow Expense Claims API', version='1.0.0')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
 
@@ -26,6 +27,7 @@ class ClaimInput(BaseModel):
     amount: float
     category: str
     notes: str = ''
+    receipt_image: str | None = None
 
 class StatusInput(BaseModel):
     status: str
@@ -49,7 +51,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS claims (
       id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER NOT NULL, vendor TEXT NOT NULL,
       expense_date TEXT NOT NULL, amount REAL NOT NULL, category TEXT NOT NULL, notes TEXT,
-      receipt_text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'submitted',
+      receipt_text TEXT NOT NULL, receipt_image TEXT, status TEXT NOT NULL DEFAULT 'submitted',
       created_at TEXT NOT NULL, approved_by INTEGER, paid_at TEXT,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     );
@@ -58,6 +60,9 @@ def init_db():
       details TEXT, created_at TEXT NOT NULL
     );
     ''')
+    columns={row['name'] for row in con.execute('PRAGMA table_info(claims)')}
+    if 'receipt_image' not in columns:
+        con.execute('ALTER TABLE claims ADD COLUMN receipt_image TEXT')
     con.commit(); con.close()
 
 def normalize(s: str) -> str:
@@ -156,7 +161,7 @@ def seed():
     """
     now=datetime.now().isoformat(timespec='seconds')
     for emp,vendor,dt,amt,cat,txt,status,approver in claims:
-        con.execute('INSERT INTO claims(employee_id,vendor,expense_date,amount,category,notes,receipt_text,status,created_at,approved_by) VALUES (?,?,?,?,?,?,?,?,?,?)',(emp,vendor,dt,amt,cat,'',txt,status,now,approver))
+        con.execute('INSERT INTO claims(employee_id,vendor,expense_date,amount,category,notes,receipt_text,receipt_image,status,created_at,approved_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)',(emp,vendor,dt,amt,cat,'',txt,SAMPLE_BILL,status,now,approver))
     con.commit(); con.close()
 
 @app.on_event('startup')
@@ -195,12 +200,14 @@ def create_claim(inp: ClaimInput):
     if inp.amount<=0: raise HTTPException(400,'Amount must be positive')
     try: date.fromisoformat(inp.expense_date)
     except: raise HTTPException(400,'expense_date must be YYYY-MM-DD')
+    if inp.receipt_image and (not inp.receipt_image.startswith('data:image/') or len(inp.receipt_image)>7_000_000):
+        raise HTTPException(400,'Upload a valid image smaller than 5 MB')
     con=db(); emp=con.execute('SELECT * FROM employees WHERE id=?',(inp.employee_id,)).fetchone()
     if not emp: con.close(); raise HTTPException(404,'Employee not found')
     dups=duplicate_candidates(con,inp.employee_id,inp.vendor,inp.expense_date,inp.amount,inp.receipt_text)
     if dups:
         con.close(); raise HTTPException(409,detail={'message':'Possible duplicate receipt detected','duplicates':dups})
-    cur=con.execute('INSERT INTO claims(employee_id,vendor,expense_date,amount,category,notes,receipt_text,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',(inp.employee_id,inp.vendor.strip(),inp.expense_date,inp.amount,inp.category,inp.notes,inp.receipt_text,'submitted',datetime.now().isoformat(timespec='seconds')))
+    cur=con.execute('INSERT INTO claims(employee_id,vendor,expense_date,amount,category,notes,receipt_text,receipt_image,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',(inp.employee_id,inp.vendor.strip(),inp.expense_date,inp.amount,inp.category,inp.notes,inp.receipt_text,inp.receipt_image,'submitted',datetime.now().isoformat(timespec='seconds')))
     claim_id=cur.lastrowid
     con.execute('INSERT INTO audit_log(claim_id,actor_id,action,details,created_at) VALUES (?,?,?,?,?)',(claim_id,inp.employee_id,'submitted','Claim created',datetime.now().isoformat(timespec='seconds')))
     con.commit(); con.close(); return get_claim(claim_id)
@@ -223,6 +230,16 @@ def change_status(claim_id:int, inp: StatusInput):
     con.execute('INSERT INTO audit_log(claim_id,actor_id,action,details,created_at) VALUES (?,?,?,?,?)',(claim_id,actor['id'],inp.status,f'{current} -> {inp.status}',datetime.now().isoformat(timespec='seconds')))
     con.commit(); con.close(); return get_claim(claim_id)
 
+@app.delete('/api/claims/{claim_id}')
+def delete_claim(claim_id:int, actor_id:int):
+    con=db(); claim=con.execute('SELECT c.id,e.manager_id FROM claims c JOIN employees e ON e.id=c.employee_id WHERE c.id=?',(claim_id,)).fetchone(); actor=con.execute('SELECT * FROM employees WHERE id=?',(actor_id,)).fetchone()
+    if not claim or not actor: con.close(); raise HTTPException(404,'Claim or actor not found')
+    if actor['role']!='manager' or claim['manager_id']!=actor['id']:
+        con.close(); raise HTTPException(403,'Only the assigned manager can delete this claim')
+    con.execute('DELETE FROM audit_log WHERE claim_id=?',(claim_id,))
+    con.execute('DELETE FROM claims WHERE id=?',(claim_id,))
+    con.commit(); con.close(); return {'ok':True}
+
 @app.get('/api/report')
 def report(month:str|None=None):
     month=month or datetime.now().strftime('%Y-%m')
@@ -241,6 +258,9 @@ def reset(inp: SeedReset):
 DIST = BASE.parent / 'frontend' / 'dist'
 if DIST.exists():
     app.mount('/assets', StaticFiles(directory=DIST / 'assets'), name='assets')
+    @app.get('/sample-bill.png')
+    def sample_bill():
+        return FileResponse(BASE / 'assets' / 'sample-bill.png')
     @app.get('/{full_path:path}')
     def spa(full_path: str):
         candidate = DIST / full_path
