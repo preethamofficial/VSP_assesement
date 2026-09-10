@@ -68,13 +68,13 @@ Open http://localhost:5173.
 
 ## Suggested demo flow
 
-1. Start as Aarav (Staff).
+1. Start as Mounika (Staff).
 2. Open New claim.
 3. Paste the sample receipt text below and click Extract fields.
 4. Review the extracted values and submit.
-5. Switch to Meera (Manager).
+5. Switch to Preetham (Manager).
 6. Open Approvals and approve a team claim.
-7. Switch to Ananya (Finance).
+7. Switch to Rakshith (Finance).
 8. Open Finance and mark an approved claim as paid.
 9. Demonstrate duplicate protection by pasting a receipt matching an existing Metro Cabs claim.
 10. Explain the monthly limit view and the immutable paid state.
