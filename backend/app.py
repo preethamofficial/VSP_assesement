@@ -115,7 +115,12 @@ def seed():
       (4,'Preetham','preetham@local','manager',None,50000),
     ]
     con.executemany('INSERT INTO employees VALUES (?,?,?,?,?,?)',employees)
-    claims=[(1,'Office Supplies','2026-09-10',1250,'Supplies','Sample office supplies purchase','submitted',None)]
+    claims=[
+      (1,'Bean & Brew','2026-09-10',480,'Meals','Client lunch meeting','submitted',None),
+      (2,'OfficeMart','2026-09-10',1250,'Supplies','Team stationery purchase','submitted',None),
+      (3,'City Cab','2026-09-10',360,'Travel','Sales client visit','submitted',None),
+      (4,'Grand Hotel','2026-09-10',2200,'Accommodation','Manager business stay','submitted',None),
+    ]
     """
       (1,'Metro Cabs','2026-09-02',210,'Travel','Auto ride to client office, receipt says Metro Cabs 02/09/2026 total ₹210','paid',4),
       (3,'QuickRide','2026-09-05',320,'Travel','QuickRide taxi 05/09/2026 ₹320','submitted',None),
