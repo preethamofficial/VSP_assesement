@@ -13,9 +13,11 @@ function App(){
  const [employees,setEmployees]=useState([]),[claims,setClaims]=useState([]),[report,setReport]=useState(null),[actor,setActor]=useState(()=>{try{return JSON.parse(localStorage.getItem('claimflow_actor'))||null}catch{return null}}),[page,setPage]=useState('dashboard'),[loading,setLoading]=useState(true),[toast,setToast]=useState('')
  const [showNew,setShowNew]=useState(false),[bill,setBill]=useState(null),[requests,setRequests]=useState([])
  const refresh=async()=>{setLoading(true);try{const [e,c,r]=await Promise.all([api('/employees'),api('/claims'),api('/report?month='+new Date().toISOString().slice(0,7))]);setEmployees(e);setClaims(c);setReport(r)}finally{setLoading(false)}}
+ const loadRequests=async()=>{if(actor?.role==='manager')setRequests(await api('/employee-requests?actor_id='+actor.id))}
  useEffect(()=>{refresh()},[])
  useEffect(()=>{if(actor)localStorage.setItem('claimflow_actor',JSON.stringify(actor));else localStorage.removeItem('claimflow_actor')},[actor])
  useEffect(()=>{if(actor&&employees.length&&!employees.some(e=>e.id===actor.id))setActor(null)},[employees,actor])
+ useEffect(()=>{if(actor?.role==='manager')loadRequests()},[actor])
  useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(''),3500);return()=>clearTimeout(t)}},[toast])
  const visible=useMemo(()=>{if(!actor)return claims; if(actor.role==='manager')return claims.filter(c=>c.manager_id===actor.id||c.employee_id===actor.id); if(actor.role==='finance')return claims; return claims.filter(c=>c.employee_id===actor.id)},[claims,actor])
  const login=async(input)=>{const person=await api('/login',{method:'POST',body:JSON.stringify(input)});setActor(person);setPage('dashboard');if(person.role==='manager')setRequests(await api('/employee-requests?actor_id='+person.id))}
@@ -33,7 +35,7 @@ function App(){
     <button className={page==='claims'?'active':''} onClick={()=>setPage('claims')}><ReceiptText size={18}/>Claims</button>
     <button className={page==='profile'?'active':''} onClick={()=>setPage('profile')}><LogOut size={18}/>Profile</button>
     {(actor.role==='manager'||actor.role==='finance')&&<button className={page==='approvals'?'active':''} onClick={()=>setPage('approvals')}><CheckCircle2 size={18}/>Approvals</button>}
-    {actor.role==='manager'&&<button className={page==='employees'?'active':''} onClick={()=>setPage('employees')}><Plus size={18}/>New employees</button>}
+    {actor.role==='manager'&&<button className={page==='employees'?'active':''} onClick={()=>{setPage('employees');loadRequests()}}><Plus size={18}/>New employees {requests.length>0&&<span className="requestCount">{requests.length}</span>}</button>}
     {actor.role==='finance'&&<button className={page==='finance'?'active':''} onClick={()=>setPage('finance')}><WalletCards size={18}/>Finance</button>}
    </nav>
    <div className="sidebarBottom"><button className="ghost" onClick={()=>setActor(null)}><LogOut size={16}/>Log out</button></div>
