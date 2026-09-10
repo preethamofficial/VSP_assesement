@@ -2,15 +2,24 @@
 
 A free, self-contained expense-claims application built for the VSP Techverse assessment.
 
+## Live application
+
+Open ClaimFlow here: **[https://vsp-assesement.onrender.com](https://vsp-assesement.onrender.com)**
+
+The free Render service can take about a minute to start after inactivity.
+
 ## What is included
 
-- Staff, manager and finance demo roles.
+- Separate manager and employee login.
+- New-employee access requests, reviewed only by the manager.
+- Profile page with password changes for every user.
+- Bill-image upload and manager bill preview before approval.
 - Receipt-text parser that extracts vendor, date, amount and category before submission.
 - Duplicate-receipt protection using normalized text + similarity + vendor/amount/date signals.
 - Manager approval workflow with server-side protection against self-approval and cross-team approval.
 - One-way claim state machine: submitted → approved/rejected; approved → paid. Paid claims cannot move backwards.
 - Finance dashboard with monthly total, category spend, employee spend and monthly limits.
-- Realistic seed data, including a deliberately similar duplicate receipt and an employee near their monthly limit.
+- Sample claims for Mounika, Rakshitha, Rakhith, and Preetham.
 - Automated backend tests.
 - Optional Docker deployment.
 
@@ -68,16 +77,11 @@ Open http://localhost:5173.
 
 ## Suggested demo flow
 
-1. Start as Mounika (Staff).
-2. Open New claim.
-3. Paste the sample receipt text below and click Extract fields.
-4. Review the extracted values and submit.
-5. Switch to Preetham (Manager).
-6. Open Approvals and approve a team claim.
-7. Switch to Rakshith (Finance).
-8. Open Finance and mark an approved claim as paid.
-9. Demonstrate duplicate protection by pasting a receipt matching an existing Metro Cabs claim.
-10. Explain the monthly limit view and the immutable paid state.
+1. Sign in as an employee and submit a claim with a bill image.
+2. Sign in as Preetham (Manager), open Approvals, view the bill, and approve or reject the claim.
+3. Use the Submitted, Approved, and Paid filters on the Claims page.
+4. Submit a new employee-access request and approve it from the New Employees tab.
+5. Open Profile to update a password.
 
 ### Sample receipt text
 
@@ -93,7 +97,7 @@ A deliberately similar receipt already exists in the seed data, so the duplicate
 
 ## Assessment decisions / assumptions
 
-1. A claim belongs to the employee who submits it. Managers are also employees and can submit claims.
+1. A claim belongs to the employee who submits it. Only the manager can select another employee when creating a claim.
 2. A manager can approve/reject only claims belonging to their direct reports.
 3. A manager cannot approve/reject their own claim.
 4. Finance can mark approved claims as paid.
@@ -102,7 +106,7 @@ A deliberately similar receipt already exists in the seed data, so the duplicate
 7. Duplicate detection is a warning/blocking rule using receipt-text similarity plus vendor, amount and date. A production version would use a stronger fingerprint, receipt image/OCR and configurable tolerance rules.
 8. Monthly spend in the demo is calculated from all claims for the month. A production policy could count only approved/paid claims; this should be agreed with the business.
 9. The receipt parser is deterministic to keep runtime free. It intentionally shows extracted fields to the user for correction before submission.
-10. Authentication is simulated by a role/person selector for the assessment demo. Production would use SSO/OAuth and server-side sessions/JWTs.
+10. The assessment login uses locally stored credentials and a browser session. Production would use password hashing, SSO/OAuth, and server-side sessions/JWTs.
 
 ## Tests
 
